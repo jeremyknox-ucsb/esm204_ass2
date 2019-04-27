@@ -1,0 +1,50 @@
+---
+title: "Esm204_ass2"
+author: "Jeremy Knox"
+date: "4/27/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(knitr)
+library(kableExtra)
+library(stargazer)
+library(latex2exp)
+library(finalfit)
+
+gas_raw = read_csv("Gas_Data.csv")
+gas = read_csv("Gas_Data.csv")
+  colnames(gas) = c("Price", "Q_l", "Q_h")
+
+```
+as.numeric(mod3$coef[2])
+[1] -0.01220884
+
+
+```{r}
+lm_D_l = glm(Price ~ Q_l, data = gas)
+lm_D_h = glm(Price ~ Q_h, data = gas)
+lm_D_agg = glm(Price ~ Q_l + Q_h, data = gas) 
+
+D_agg = function(Q) {
+  P = 29.06746 + Q * -0.0001117683 + Q * -7.864067e-05
+  return(P)
+}
+
+S = function(Q) {
+  P = 0 + Q * (5 / 126399)
+  return(P)
+}
+
+# Given P = 5 => Q = 126399
+curve((D_agg(x)), from = 0, to = 150000)
+curve((S(x)), from = 0, to = 150000)
+
+
+plot(gas$Q_l, gas$Price, xlim = c(70000, 150000)) +plot(gas$Q_h, gas$Price, xlim = c(70000, 150000)) + plot((gas$Q_h + gas$Q_l), gas$Price, xlim = c(70000, 150000))
+```
+
