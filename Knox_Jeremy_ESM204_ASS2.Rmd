@@ -2,10 +2,12 @@
 title: "Esm204_ass2"
 author: "Jeremy Knox"
 date: "4/27/2019"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 
-```{r setup, include=FALSE}
+```{r setup, include=FALSE, warning=F, echo=F}
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(ggplot2)
@@ -18,81 +20,194 @@ library(finalfit)
 
 gas_raw = read_csv("Gas_Data.csv")
 gas = read_csv("Gas_Data.csv")
-  colnames(gas) = c("Price", "Q_l", "Q_h")
+  colnames(gas) = c("price", "qhigh", "qlow")
 
 ```
-as.numeric(mod3$coef[2])
-[1] -0.01220884
+
+# Raw Data
+```{r Plot Raw Data, warning=F, echo=F, fig.height=4}
+
+plot(gas$qhigh, gas$price, 
+     xlim = c(70000, 150000), 
+     xlab = "Quantity Gas (gallon)", 
+     ylab = "Price ($/gallon)",
+     title("Low Income Demand for Gas"))  
+plot(gas$qlow, gas$price, 
+     xlim = c(70000, 150000), 
+     xlab = "Quantity Gas (gallon)", 
+     ylab = "Price ($/gallon)",
+     title("High Income Demand for Gas"))
+
+```
 
 
-```{r}
-# P = Price
-# Q = Quantity
-# D = Demand 
-# S = Supply
+```{r Market for Gas Equations, warning=F, echo=F}
+# KEY:
+# Price = p = P
+# Quantity = q = Q
+# Demand  = d = D 
+# Supply = s = S
 
-# Demand for Low Income:
-# P = 21.99085 - (0.0001355174 * Q) 
-lm_D_l = glm(Price ~ Q_l, data = gas)
-D_l = function(Q) as.numeric(coef(lm_D_l)["(Intercept)"]) + Q * as.numeric(coef(lm_D_l)["Q_l"]) 
 
-# Demand for High Income:
-# P = 23.39144 - (0.0001296638 * Q)
-lm_D_h = glm(Price ~ Q_h, data = gas)
-D_h = function(Q) as.numeric(coef(lm_D_h)["(Intercept)"]) + Q * as.numeric(coef(lm_D_h)["Q_h"]) 
+# Deriving demand from linear regression:
+d_high_lm = lm(data = gas, price ~ qhigh)
+d_low_lm = lm(data = gas, price ~ qlow)
 
-# Demand Aggregate:
-# P = 22.70657 - (0.0000662629 * Q)
-# In terms of Q, D_agg:= Q = 342674 - (15091.4 * P)
-# At P = 5 => Q = 267217.1
-D_agg = function(Q) 22.70657 - (0.0000662629 * Q)
 
-# Market Equalibrium: 
-P_equalibrium = 5
-Q_equalibrium = (P_equalibrium / as.numeric(coef(lm_D_l)["Q_l"])) +
-       (-as.numeric(coef(lm_D_l)["(Intercept)"]) / as.numeric(coef(lm_D_l)["Q_l"])) + 
-       (P_equalibrium / as.numeric(coef(lm_D_h)["Q_h"])) + 
-       (-as.numeric(coef(lm_D_h)["(Intercept)"]) / as.numeric(coef(lm_D_h)["Q_h"])) 
-equalibrium = data.frame(P_equalibrium, Q_equalibrium)
+# Demand curve high:
+int_h = d_high_lm$coefficients[1]
+q_high = abs(d_high_lm$coefficients[2])
+d_high = function(q) {
+  int_h - (q_high*q)
+}
+d_highq = function(p) {
+  (int_h/q_high) - (p/q_high)
+}
 
-# Supply:
-# P = 0 + ((267217.1 / 5) * Q)
-S = function(Q) (equalibrium$Q_equalibrium / equalibrium$p_equalibrium * Q)
 
-figure1 = ggplot(data = data.frame(x = 0), mapping = aes(x = x)) +
-  stat_function(fun = S) + 
-  stat_function(fun = D_h) +
-  stat_function(fun = D_l) +
-  stat_function(fun = D_agg) +
-  geom_point(aes(x = equalibrium$Q_equalibrium, 
-                 y = equalibrium$P_equalibrium), size = 2) +
-  xlim(0, 500000) +
-  ylim(0,30) +
+# Demand curve low:
+int_l = d_low_lm$coefficients[1]
+q_low = abs(d_low_lm$coefficients[2])
+d_low = function(q) {
+  int_l - (q_low*q)
+}
+d_lowq = function(p) {
+  (int_l/q_low) - (p/q_low)
+}
+
+
+# Demand curve aggregate:
+agg_int = (int_h/q_high) + (int_l/q_low)
+agg_slope = abs((-1/q_high) + (-1/q_low))
+d_aggq = function(p) {
+  agg_int - agg_slope*p
+}
+d_agg = function(q) {
+  (agg_int/agg_slope) - ((1/agg_slope)*q)
+}
+
+
+# Quantity at equilibrium, price = 5: 
+q_sq = d_highq(5) + d_lowq(5)
+
+
+# Supply curve (derived from equalibrium at p = 5):
+mpc_slope = (5/q_sq)
+
+mpc = function(q) {
+  mpc_slope*q
+}
+
+
+# Environmental cost curve:
+mec = function(y) {
+  2
+}
+
+
+# Supply curve with TAX:
+mpc_tax = function(q) {
+  0.5 + mpc_slope*q
+}
+
+
+```
+
+
+```{r Cost Benefit Calculations, warning=F, echo=F}
+
+# CS high demand:
+q_high_sq = d_highq(5)
+fullarea_high = integrate(d_high, lower = 0, upper = q_high_sq)
+cost_high = q_high_sq * 5
+cs_high = fullarea_high$value - cost_high
+
+
+# CS low demand:
+q_low_sq = d_lowq(5)
+fullarea_low = integrate(d_low, lower = 0, upper = q_low_sq)
+cost_low = q_low_sq * 5
+cs_low = fullarea_low$value - cost_low
+
+
+# CS aggregate:
+cs_agg = cs_high + cs_low
+
+
+# PS:
+mpc_area = integrate(mpc, lower = 0, upper = q_sq)
+ps_total = 5*q_sq - mpc_area$value
+
+
+# Env Cost: 
+env_cost = 2*q_sq
+
+
+# PS after TAX:
+q_tax = ((agg_int/agg_slope)-0.50)/((1/agg_slope)+mpc_slope) # equalibrium quantity
+p_tax = d_agg(q_tax) # equalibrium price
+mpc_tax_area = integrate(mpc_tax, lower = 0, q_tax)
+mpc_tax_total =  p_tax*q_tax - mpc_tax_area$value
+
+
+# CS after TAX:
+q_high_tax = d_highq(p_tax)
+area_high_tax = integrate(d_high, lower = 0, upper = q_high_tax)
+cost_high_tax = q_high_tax * p_tax
+cs_high_tax = area_high_tax$value - cost_high_tax
+
+q_low_tax = d_lowq(p_tax)
+area_low_tax = integrate(d_low, lower = 0, upper = q_low_tax)
+cost_low_tax = q_low_tax * p_tax
+cs_low_tax = area_low_tax$value - cost_low_tax
+
+
+# Env cost after TAX:
+env_cost_tax = 2*q_tax
+
+
+# Tax revenue:
+p_mpc_tax = mpc(q_tax)
+tax_rev = q_tax * (p_tax - p_mpc_tax)
+
+```
+
+# Problem 1
+**Gasoline daily free market in France:**
+Key: $P$ = price ($/gallon), $Q$ = quantity (gallon)  
+Aggregate demand = $P = `r agg_int/agg_slope` - `r 1/agg_slope`Q$  
+Supply = $P = `r mpc_slope`Q$  
+Benefit to consumers = Consumer Surplus = $`r cs_agg`$  
+Benefit to producers = Producer Surplus = $`r ps_total`$  
+Envrionmental cost = $`r env_cost`$  
+
+# Problem 2  
+Consumer Surplus High Income = $CS_{H} = `r cs_high`$  
+Consumer Surplus Low Income = $CS_{L} = `r cs_low`$  
+
+# Problem 3
+Equalibrium Quantity after tax = $Q_{\tau} = `r q_tax`$  
+Equalibrium Price after tax = $P_{\tau} =  `r p_tax`$  
+Consumer Surplus High Income after tax = $CS_{H_\tau} = `r cs_high`$  
+Consumer Surplus Low Income after tax = $CS_{L_\tau} = `r cs_low`$  
+Producer Surplus after tax = $PS_{\tau} = `r mpc_tax_total`$  
+Environmental cost after tax = $`r env_cost_tax`$  
+Total revenue generated by tax = $`r tax_rev`$  
+
+
+```{r Plot, warning=F, echo=F}
+ggplot(data.frame(x=c(0:400000)), aes(x=x)) + 
+  stat_function(fun=d_high, geom ="line", color = "blue") + 
+  stat_function(fun=d_low, geom = "line", color = "lightblue") +
+  stat_function(fun=mpc, geom = "line", color = "red") +
+  stat_function(fun=mpc_tax, geom = "line", color = "pink") +
+  stat_function(fun=mec, geom = "line", color = "green") +
+  stat_function(fun=d_agg, geom = "line", color = "black") +
+  labs(x = "Quantity of Gas (gallon)", 
+       y = "Price ($/gallon)", 
+       title = "French Gasoline Market") +
+  scale_x_continuous(limits =c(0,400000), expand = c(0,0)) +
+  scale_y_continuous(limits=c(0,25), expand=c(0,0)) +
   theme_classic()
-figure1
-
-
-
-
-
-# D_agg = function(Q) {
-#   P = 29.06746 + Q * -0.0001117683 + Q * -7.864067e-05
-#   return(P)
-# }
-# 
-# S = function(Q) {
-#   P = 0 + Q * (5 / 126399)
-#   return(P)
-# }
-
-# Given P = 5 => Q = 126399
-# curve((D_agg(x)), from = 0, to = 150000)
-# curve((S(x)), from = 0, to = 150000)
-
-
-# plot(c(gas$Q_h, gas$Q_l), c(gas$Price,gas$Price), xlim = c(70000, 150000))
-
-# +plot(gas$Q_h, gas$Price, xlim = c(70000, 150000)) + 
-#   plot((gas$Q_h + gas$Q_l), gas$Price, xlim = c(70000, 150000))
 ```
 
